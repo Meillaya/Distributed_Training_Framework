@@ -4,7 +4,7 @@ This project is a toy implementation of a distributed training framework for lar
 
 ## Setup
 
-It is recommended to use a virtual environment. The user mentioned using `uv`.
+It is recommended to use a virtual environment. This project uses `uv` for dependency management.
 
 **Requirements:**
 - For AMD GPUs: ROCm support is required. See [AMD ROCm installation guide](https://rocm.docs.amd.com/)
@@ -22,14 +22,16 @@ It is recommended to use a virtual environment. The user mentioned using `uv`.
 
 3.  **Install dependencies:**
     ```bash
-    uv pip install -r requirements.txt
+    uv sync
     ```
     
-    **For AMD GPUs:** The requirements.txt is configured for ROCm support by default.
+    The `pyproject.toml` file is configured for ROCm support by default. The project uses PyTorch nightly builds with ROCm 6.2 support.
     
-    **For NVIDIA GPUs:** You may need to modify requirements.txt to use the CUDA index URL:
-    ```
-    --index-url https://download.pytorch.org/whl/cu121
+    **For NVIDIA GPUs:** You may need to modify the `extra-index-url` in `pyproject.toml` to use the CUDA index URL:
+    ```toml
+    [tool.uv]
+    extra-index-url = ["https://download.pytorch.org/whl/nightly/cu121"]
+    prerelease = "allow"
     ```
 
 4.  **AMD GPU Setup (if applicable):**
@@ -72,4 +74,10 @@ To run the example with 4 processes on the same machine:
 
 ```bash
 uv run torchrun --nproc_per_node=4 src/pipeline.py
-``` 
+```
+
+## Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+- `docs/project_documentation.md`: Overview of the project setup and implementation
+- `docs/theoretical_deep_dive.md`: In-depth theoretical background and code analysis 
