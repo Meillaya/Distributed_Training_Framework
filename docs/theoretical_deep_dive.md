@@ -33,21 +33,21 @@ The model's layers are partitioned sequentially across multiple devices. For a s
 
 ### 3.2. The Execution Flow (Forward Pass)
 
-Let the input be \(X\) and the layers be functions \(L_i\).
-1.  GPU 0 computes its partition: \(A_1 = L_2(L_1(X))\). \(A_1\) is the intermediate activation.
-2.  GPU 0 **sends** the tensor \(A_1\) to GPU 1 over the network.
-3.  GPU 1 **receives** \(A_1\) and computes the final output: \(Y = L_4(L_3(A_1))\).
+Let the input be $X$ and the layers be functions $L_i$.
+1.  GPU 0 computes its partition: $A_1 = L_2(L_1(X))$. $A_1$ is the intermediate activation.
+2.  GPU 0 **sends** the tensor $A_1$ to GPU 1 over the network.
+3.  GPU 1 **receives** $A_1$ and computes the final output: $Y = L_4(L_3(A_1))$.
 
 ### 3.3. The Backward Pass and the Chain Rule
 
-The backward pass relies on the chain rule of calculus to propagate gradients from the output back to the input. Let \(L\) be the loss function. We need to compute \(\frac{\partial L}{\partial W_i}\) for the weights \(W_i\) in each layer.
+The backward pass relies on the chain rule of calculus to propagate gradients from the output back to the input. Let $L$ be the loss function. We need to compute $\frac{\partial L}{\partial W_i}$ for the weights $W_i$ in each layer.
 
-1.  GPU 1 computes the gradients for its layers: \(\frac{\partial L}{\partial W_4}\) and \(\frac{\partial L}{\partial W_3}\).
-2.  Crucially, GPU 1 also computes the gradient of the loss with respect to its *input*, which is \(A_1\): \(\frac{\partial L}{\partial A_1}\).
-3.  GPU 1 **sends** the gradient tensor \(\frac{\partial L}{\partial A_1}\) back to GPU 0.
-4.  GPU 0 **receives** \(\frac{\partial L}{\partial A_1}\). This incoming gradient is the starting point for its own backward pass. It can now compute its local gradients using the chain rule:
-    \[ \frac{\partial L}{\partial W_2} = \frac{\partial L}{\partial A_1} \frac{\partial A_1}{\partial W_2} \]
-    \[ \frac{\partial L}{\partial W_1} = \frac{\partial L}{\partial A_1} \frac{\partial A_1}{\partial W_1} \]
+1.  GPU 1 computes the gradients for its layers: $\frac{\partial L}{\partial W_4}$ and $\frac{\partial L}{\partial W_3}$.
+2.  Crucially, GPU 1 also computes the gradient of the loss with respect to its *input*, which is $A_1$: $\frac{\partial L}{\partial A_1}$.
+3.  GPU 1 **sends** the gradient tensor $\frac{\partial L}{\partial A_1}$ back to GPU 0.
+4.  GPU 0 **receives** $\frac{\partial L}{\partial A_1}$. This incoming gradient is the starting point for its own backward pass. It can now compute its local gradients using the chain rule:
+    $$ \frac{\partial L}{\partial W_2} = \frac{\partial L}{\partial A_1} \frac{\partial A_1}{\partial W_2} $$
+    $$ \frac{\partial L}{\partial W_1} = \frac{\partial L}{\partial A_1} \frac{\partial A_1}{\partial W_1} $$
 
 ### 3.4. Analysis of `src/main.py`
 
@@ -75,7 +75,7 @@ A common and effective scheduling strategy is the "one forward, one backward" (1
 2.  **Steady State:** Once the pipeline is full, each GPU alternates between performing a backward pass for an "old" micro-batch and a forward pass for a "new" micro-batch.
 3.  **Cool-down (Drain the pipeline):** Once all forward passes are done, the remaining backward passes are completed.
 
-This significantly reduces the idle time (the bubble). The fraction of time wasted in the bubble for a pipeline of depth \(P\) (number of stages/devices) and \(M\) micro-batches is approximately \(\frac{P-1}{M + P - 1}\). As \(M\) becomes large relative to \(P\), the bubble overhead becomes negligible.
+This significantly reduces the idle time (the bubble). The fraction of time wasted in the bubble for a pipeline of depth $P$ (number of stages/devices) and $M$ micro-batches is approximately $\frac{P-1}{M + P - 1}$. As $M$ becomes large relative to $P$, the bubble overhead becomes negligible.
 
 ### 4.3. Analysis of `src/pipeline.py`
 
@@ -94,7 +94,7 @@ Pipeline parallelism reduces idle time but introduces a new problem: high memory
 Gradient checkpointing (also known as activation recomputation) is a technique that trades a bit of extra computation for a significant reduction in memory usage.
 
 **The standard approach:** During the forward pass, store the inputs to every layer. During the backward pass, retrieve these stored inputs to compute gradients.
-\[ \text{Memory Cost} \propto \text{Number of Layers} \times \text{Batch Size} \]
+$$ \text{Memory Cost} \propto \text{Number of Layers} \times \text{Batch Size} $$
 
 **The checkpointing approach:**
 1.  During the forward pass, do *not* store the intermediate activations for most layers. Only store the inputs to certain "checkpointed" blocks (e.g., the input to an entire Transformer layer).
@@ -104,8 +104,8 @@ This dramatically reduces the memory required for activations, often making it i
 
 ### 5.2. Mathematical Justification
 
-Let a model partition consist of a sequence of functions \(f_1, f_2, ..., f_k\). The output is \(y = f_k(...f_2(f_1(x))...)\).
-To compute \(\frac{\partial L}{\partial W_i}\) for weights in layer \(f_i\), we need the input to that layer, \(a_{i-1}\). Without checkpointing, we store all \(a_0, a_1, ..., a_{k-1}\). With checkpointing, we might only store \(x=a_0\). To compute the gradient for \(f_i\), we would first re-run the forward pass \(a_{i-1} = f_{i-1}(...f_1(x)...)\) and then proceed with the backward calculation. The computational overhead is one extra forward pass for the checkpointed segment.
+Let a model partition consist of a sequence of functions $f_1, f_2, ..., f_k$. The output is $y = f_k(...f_2(f_1(x))...)$.
+To compute $\frac{\partial L}{\partial W_i}$ for weights in layer $f_i$, we need the input to that layer, $a_{i-1}$. Without checkpointing, we store all $a_0, a_1, ..., a_{k-1}$. With checkpointing, we might only store $x=a_0$. To compute the gradient for $f_i$, we would first re-run the forward pass $a_{i-1} = f_{i-1}(...f_1(x)...)$ and then proceed with the backward calculation. The computational overhead is one extra forward pass for the checkpointed segment.
 
 ### 5.3. Analysis of `src/pipeline.py`
 
